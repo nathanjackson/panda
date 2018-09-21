@@ -46,13 +46,6 @@ notifications:
 env:
   global:
     - TEST_CMD="make check"
-  matrix:
-    - CONFIG=""
-    - CONFIG="--enable-debug --enable-debug-tcg --enable-trace-backends=log"
-    - CONFIG="--disable-linux-aio --disable-cap-ng --disable-attr --disable-brlapi --disable-uuid --disable-libusb"
-    - CONFIG="--enable-modules"
-    - CONFIG="--with-coroutine=ucontext"
-    - CONFIG="--with-coroutine=sigaltstack"
 git:
   # we want to do this ourselves
   submodules: false
