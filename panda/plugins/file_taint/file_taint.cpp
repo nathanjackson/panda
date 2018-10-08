@@ -37,6 +37,8 @@ void uninit_plugin(void *);
 }
 
 static std::string target_file;
+static uint32_t label = 0x8BADF00D;
+static bool positional_labels = false;
 
 bool filename_matches(const std::string &fn)
 {
@@ -57,7 +59,11 @@ void read_return_normalized(const std::string &filename,
             "read return (filename = %s, buffer address = 0x%X, count = %lu)\n",
             filename.c_str(), physical_address, count);
         for (auto i = 0; i < count; i++) {
-            taint2_label_ram(physical_address + i, 0x8BADF00D);
+            if (positional_labels) {
+                taint2_label_ram(physical_address + i, label++);
+            } else {
+                taint2_label_ram(physical_address + i, label);
+            }
         }
     }
 }
@@ -171,6 +177,13 @@ bool init_plugin(void *self)
     panda_arg_list *args = panda_get_args("file_taint");
     target_file =
         panda_parse_string_req(args, "filename", "Name of the file to taint.");
+    label = panda_parse_uint32_opt(args, "label", 0x8BADF00D,
+                                   "the label to apply to the read buffer");
+    positional_labels = panda_parse_bool_opt(args, "positional_labels",
+                                             "enables positional labels");
+    if (positional_labels) {
+        label = 0;
+    }
 
     return true;
 }
