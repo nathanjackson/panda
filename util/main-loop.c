@@ -494,7 +494,8 @@ int main_loop_wait(int nonblocking)
     int64_t timeout_ns;
 
     if (rr_in_replay()) {
-        timeout = RR_MAIN_WAIT_LOOP_TIMEOUT_IN_REPLAY;
+        // timeout = RR_MAIN_WAIT_LOOP_TIMEOUT_IN_REPLAY;
+        timeout = UINT32_MAX - 1;
     }
     else if (nonblocking) {
         timeout = 0;

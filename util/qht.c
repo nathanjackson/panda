@@ -765,7 +765,8 @@ static void qht_do_resize_reset(struct qht *ht, struct qht_map *new, bool reset)
 
     atomic_rcu_set(&ht->map, new);
     qht_map_unlock_buckets(old);
-    call_rcu(old, qht_map_destroy, rcu);
+    // call_rcu(old, qht_map_destroy, rcu);
+    qht_map_destroy(old);
 }
 
 bool qht_resize(struct qht *ht, size_t n_elems)
