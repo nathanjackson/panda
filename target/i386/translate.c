@@ -8350,6 +8350,15 @@ void tcg_x86_init(void)
     }
 }
 
+void panda_insert_call_before(target_ulong pc,
+                              void (*callee)(CPUState *cpu, target_ulong pc));
+
+void panda_insert_call_before(target_ulong pc,
+                              void (*callee)(CPUState *cpu, target_ulong pc)) {
+  gen_helper_panda_insert_call_wrapper(tcg_const_tl(pc),
+                                       tcg_const_ptr((void *)callee));
+}
+
 /* generate intermediate code for basic block 'tb'.  */
 void gen_intermediate_code(CPUX86State *env, TranslationBlock *tb)
 {

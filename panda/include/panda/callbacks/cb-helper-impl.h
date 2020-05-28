@@ -31,6 +31,11 @@ void HELPER(panda_after_insn_exec)(target_ulong pc) {
     }
 }
 
+void HELPER(panda_insert_call_wrapper)(target_ulong pc, void *func) {
+  void (*callee)(CPUState *cpu, target_ulong pc) = func;
+  callee(first_cpu, pc);
+}
+
 #if defined(TARGET_ARM)
 void HELPER(panda_guest_hypercall)(CPUArchState *cpu_env) {
     panda_callbacks_guest_hypercall(ENV_GET_CPU(cpu_env));
