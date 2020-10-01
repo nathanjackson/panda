@@ -13,6 +13,8 @@ PANDAENDCOMMENT */
 #include <string>
 #include <unordered_set>
 
+#include <capstone/capstone.h>
+
 #include "panda/plugin.h"
 
 // OSI
@@ -36,6 +38,8 @@ const char *MONITOR_HELP = "help";
 constexpr size_t MONITOR_HELP_LEN = 4;
 const std::string MONITOR_ENABLE = "coverage_enable";
 const std::string MONITOR_DISABLE = "coverage_disable";
+
+static csh handle;
 
 // These need to be extern "C" so that the ABI is compatible with
 // QEMU/PANDA, which is written in C
@@ -64,8 +68,14 @@ static void log_message(const char *fmt, ...)
     va_end(arglist);
 }
 
+static bool in_interrupt = false;
+
 static void callback(TranslationBlock *tb)
 {
+//    if (in_interrupt) {
+//        return;
+//    }
+
     Block block {
         .addr = tb->pc,
         .size = tb->size
@@ -73,17 +83,54 @@ static void callback(TranslationBlock *tb)
     processor->handle(block);
 }
 
+static void iret_callback(TranslationBlock *tb)
+{
+    in_interrupt = false;
+}
+
+const std::unordered_set<x86_insn> IRETS = {
+    X86_INS_IRET,
+    X86_INS_IRETD,
+    X86_INS_IRETQ
+};
+
 static void before_tcg_codegen(CPUState *cpu, TranslationBlock *tb)
 {
+    std::vector<uint8_t> block_data(tb->size);
+    panda_virtual_memory_read(cpu, tb->pc, block_data.data(), block_data.size());
+    cs_insn *insn;
+    int insn_count = cs_disasm(handle, block_data.data(), block_data.size(), tb->pc, 0, &insn);
+    int iret_index = -1;
+    if (insn_count > 0) {
+        auto it = IRETS.find((x86_insn)insn[insn_count - 1].id);
+        if (IRETS.end() != it) {
+            iret_index = insn_count - 1;
+	}
+    }
+    cs_free(insn, insn_count);
+
+    if (iret_index > -1) {
+        TCGOp *iret_point = find_guest_insn(iret_index);
+	assert(NULL != iret_point);
+	insert_call(&iret_point, &iret_callback, tb);
+    }
+
+
     // Determine if we should instrument the current block.
     if (nullptr == processor || !predicate->eval(cpu, tb)) {
         return;
     }
 
     // Instrument!
-    TCGOp *insert_point = find_first_guest_insn();
+    TCGOp *insert_point = find_guest_insn(0);
     assert(NULL != insert_point);
     insert_call(&insert_point, &callback, tb);
+}
+
+static int32_t before_handle_interrupt(CPUState *cpu, int32_t intno)
+{
+    in_interrupt = true;
+    return  intno;
 }
 
 static void disable_instrumentation()
@@ -219,6 +266,11 @@ bool init_plugin(void *self)
 
     pcb.monitor = monitor_callback;
     panda_register_callback(self, PANDA_CB_MONITOR, pcb);
+
+    pcb.before_handle_interrupt = before_handle_interrupt;
+    panda_register_callback(self, PANDA_CB_BEFORE_HANDLE_INTERRUPT, pcb);
+
+    assert(CS_ERR_OK == cs_open(CS_ARCH_X86, CS_MODE_32, &handle));
 
     return true;
 }

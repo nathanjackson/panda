@@ -13,7 +13,7 @@
  * Search the TCG context for the first guest instruction marker and return a
  * pointer to it.
  */
-TCGOp *find_first_guest_insn();
+TCGOp *find_guest_insn(int index);
 
 /**
  * Template that converts host pointers to TCG constants. Not really intended
