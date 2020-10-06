@@ -68,7 +68,10 @@ static void log_message(const char *fmt, ...)
     va_end(arglist);
 }
 
-static bool in_interrupt = false;
+//static bool in_interrupt = false;
+
+static bool include_split = false;
+static Block split_block;
 
 static void callback(TranslationBlock *tb)
 {
@@ -76,17 +79,32 @@ static void callback(TranslationBlock *tb)
 //        return;
 //    }
 
+    if (tb->was_split) {
+        split_block.addr = tb->pc;
+        split_block.size = tb->size;
+        log_message("split block: pc=0x" TARGET_FMT_lx " size=" TARGET_FMT_lu, tb->pc, tb->size);
+	include_split = true;
+        return;
+    }
+
     Block block {
         .addr = tb->pc,
         .size = tb->size
     };
+
+    if (include_split) {
+        block.addr = split_block.addr;
+        block.size += split_block.size;
+	include_split = false;
+    }
+
     processor->handle(block);
 }
 
-static void iret_callback(TranslationBlock *tb)
+/*static void iret_callback(TranslationBlock *tb)
 {
     in_interrupt = false;
-}
+}*/
 
 const std::unordered_set<x86_insn> IRETS = {
     X86_INS_IRET,
@@ -96,7 +114,7 @@ const std::unordered_set<x86_insn> IRETS = {
 
 static void before_tcg_codegen(CPUState *cpu, TranslationBlock *tb)
 {
-    std::vector<uint8_t> block_data(tb->size);
+/*    std::vector<uint8_t> block_data(tb->size);
     panda_virtual_memory_read(cpu, tb->pc, block_data.data(), block_data.size());
     cs_insn *insn;
     int insn_count = cs_disasm(handle, block_data.data(), block_data.size(), tb->pc, 0, &insn);
@@ -113,7 +131,7 @@ static void before_tcg_codegen(CPUState *cpu, TranslationBlock *tb)
         TCGOp *iret_point = find_guest_insn(iret_index);
 	assert(NULL != iret_point);
 	insert_call(&iret_point, &iret_callback, tb);
-    }
+    } */
 
 
     // Determine if we should instrument the current block.
@@ -127,11 +145,11 @@ static void before_tcg_codegen(CPUState *cpu, TranslationBlock *tb)
     insert_call(&insert_point, &callback, tb);
 }
 
-static int32_t before_handle_interrupt(CPUState *cpu, int32_t intno)
+/*static int32_t before_handle_interrupt(CPUState *cpu, int32_t intno)
 {
     in_interrupt = true;
     return  intno;
-}
+}*/
 
 static void disable_instrumentation()
 {
@@ -267,8 +285,8 @@ bool init_plugin(void *self)
     pcb.monitor = monitor_callback;
     panda_register_callback(self, PANDA_CB_MONITOR, pcb);
 
-    pcb.before_handle_interrupt = before_handle_interrupt;
-    panda_register_callback(self, PANDA_CB_BEFORE_HANDLE_INTERRUPT, pcb);
+    //pcb.before_handle_interrupt = before_handle_interrupt;
+    //panda_register_callback(self, PANDA_CB_BEFORE_HANDLE_INTERRUPT, pcb);
 
     assert(CS_ERR_OK == cs_open(CS_ARCH_X86, CS_MODE_32, &handle));
 
